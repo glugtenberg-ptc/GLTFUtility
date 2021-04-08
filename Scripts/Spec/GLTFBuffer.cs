@@ -29,9 +29,10 @@ namespace Siccity.GLTFUtility {
 #region Import
 		/// <param name="filepath">Filepath if loading from a file</param>
 		/// <param name="bytefile">bytes if loading from raw bytes</param>
-		public ImportResult Import(string filepath, byte[] bytefile, long binChunkStart) {
+		public ImportResult Import(string filepath, byte[] bytefile, long binChunkStart, Func<string, byte[]> urlDataDelegate) {
 			ImportResult result = new ImportResult();
 
+			//var externalBytes = (filepath == null && !uri.StartsWith(embeddedPrefix) && !uri.StartsWith(embeddedPrefix2));
 			if (uri == null) {
 				// Load entire file
 				if (string.IsNullOrEmpty(filepath)) result.stream = new MemoryStream(bytefile);
@@ -50,9 +51,22 @@ namespace Siccity.GLTFUtility {
 				result.stream = new MemoryStream(bytes);
 			} else {
 				// Load URI
-				string directoryRoot = Directory.GetParent(filepath).ToString() + "/";
-				result.stream = File.OpenRead(directoryRoot + uri);
-				result.startOffset = result.stream.Length - byteLength;
+				if (!string.IsNullOrEmpty(filepath))
+				{
+					//local
+					string directoryRoot = Directory.GetParent(filepath).ToString() + "/";
+					result.stream = File.OpenRead(directoryRoot + uri);
+					result.startOffset = result.stream.Length - byteLength;
+				}
+				else
+				{
+					//remote
+					var remoteData = urlDataDelegate(uri);
+
+					result.stream = new MemoryStream(remoteData);
+					result.startOffset = result.stream.Length - byteLength;
+					result.stream.Position = result.startOffset;
+				}
 			}
 
 			return result;
@@ -61,13 +75,18 @@ namespace Siccity.GLTFUtility {
 		public class ImportTask : Importer.ImportTask<ImportResult[]> {
 			/// <param name="filepath">Filepath if loading from a file</param>
 			/// <param name="bytefile">bytes if loading from raw bytes</param>
-			public ImportTask(List<GLTFBuffer> buffers, string filepath, byte[] bytefile, long binChunkStart) : base() {
-				task = new Task(() => {
+			public ImportTask(List<GLTFBuffer> buffers, string filepath, byte[] bytefile, long binChunkStart, Func<string, byte[]> urlDataDelegate) : base()
+			{
+
+				task = new Task(() =>
+				{
 					Result = new ImportResult[buffers.Count];
-					for (int i = 0; i < Result.Length; i++) {
-						Result[i] = buffers[i].Import(filepath, bytefile, binChunkStart);
+					for (int i = 0; i < Result.Length; i++)
+					{
+						Result[i] = buffers[i].Import(filepath, bytefile, binChunkStart, urlDataDelegate);
 					}
 				});
+
 			}
 		}
 #endregion

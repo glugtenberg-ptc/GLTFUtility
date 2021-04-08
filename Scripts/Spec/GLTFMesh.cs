@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Scripting;
 
@@ -52,6 +53,9 @@ namespace Siccity.GLTFUtility {
 				List<Vector2> uv8 = null;
 				List<BlendShape> blendShapes = new List<BlendShape>();
 				List<int> submeshVertexStart = new List<int>();
+				List<Mesh> dracoMeshes = new List<Mesh>();
+				//List<NativeArray<byte>> dracoData = new List<NativeArray<byte>>();
+				public List<IEnumerator> dracoMeshRoutines { get; private set; } = new List<IEnumerator>();
 
 				private class BlendShape {
 					public string name;
@@ -69,12 +73,16 @@ namespace Siccity.GLTFUtility {
 							if (primitive.extensions != null && primitive.extensions.KHR_draco_mesh_compression != null) {
 								GLTFPrimitive.DracoMeshCompression draco = primitive.extensions.KHR_draco_mesh_compression;
 								GLTFBufferView.ImportResult bufferView = bufferViews[draco.bufferView];
-								GLTFUtilityDracoLoader loader = new GLTFUtilityDracoLoader();
+
+								//GLTFUtilityDracoLoader loader = new GLTFUtilityDracoLoader();
+								var dracoLoader = new DracoMeshLoader();
+								
 								byte[] buffer = new byte[bufferView.byteLength];
 								bufferView.stream.Seek(bufferView.byteOffset, System.IO.SeekOrigin.Begin);
 
 								bufferView.stream.Read(buffer, 0, bufferView.byteLength);
 
+								/*
 								GLTFUtilityDracoLoader.MeshAttributes attribs = new GLTFUtilityDracoLoader.MeshAttributes(
 									primitive.extensions.KHR_draco_mesh_compression.attributes.POSITION ?? -1,
 									primitive.extensions.KHR_draco_mesh_compression.attributes.NORMAL ?? -1,
@@ -84,13 +92,26 @@ namespace Siccity.GLTFUtility {
 									primitive.extensions.KHR_draco_mesh_compression.attributes.COLOR_0 ?? -1
 								);
 
-								//Mesh mesh = loader.LoadMesh(buffer, attribs);
-
 								GLTFUtilityDracoLoader.AsyncMesh asyncMesh = loader.LoadMesh(buffer, attribs);
-								if (asyncMesh == null) Debug.LogWarning("Draco mesh couldn't be loaded");
+								*/
+								// TODO persistent allocator and dispose when non happy flow
+								var data = new NativeArray<byte>(buffer, Allocator.Persistent);
+								//dracoData.Add(data);
+
+								dracoLoader.onMeshesLoaded += (mesh) =>
+								{
+									dracoMeshes.Add(mesh);
+									data.Dispose();
+								};
+
+								var dracoMeshRoutine = dracoLoader.DecodeMesh(data);
+								dracoMeshRoutines.Add(dracoMeshRoutine);
+
+								//if (asyncMesh == null) Debug.LogWarning("Draco mesh couldn't be loaded");
+								if (dracoMeshRoutine == null) Debug.LogWarning("Draco mesh couldn't be loaded");
 
 								submeshTrisMode.Add(primitive.mode);
-
+								/*
 								// Tris
 								int vertCount = verts.Count();
 								submeshTris.Add(asyncMesh.tris.Reverse().Select(x => x + vertCount).ToList());
@@ -105,24 +126,12 @@ namespace Siccity.GLTFUtility {
 									weights.AddRange(asyncMesh.boneWeights);
 								}
 
-								// BlendShapes not supported yet
-								/* for (int k = 0; k < mesh.blendShapeCount; k++) {
-									int frameCount = mesh.GetBlendShapeFrameCount(k);
-									BlendShape blendShape = new BlendShape();
-									blendShape.pos = new Vector3[frameCount];
-									blendShape.norm = new Vector3[frameCount];
-									blendShape.tan = new Vector3[frameCount];
-									for (int o = 0; o < frameCount; o++) {
-										mesh.GetBlendShapeFrameVertices(k, o, blendShape.pos, blendShape.norm, blendShape.tan);
-									}
-									blendShapes.Add(blendShape);
-								} */
-
 								// UVs
 								if (asyncMesh.uv != null) {
 									if (uv1 == null) uv1 = new List<Vector2>();
 									uv1.AddRange(asyncMesh.uv.Select(x => new Vector2(x.x, -x.y)));
 								}
+								*/
 							}
 							// Load normal mesh
 							else {
@@ -220,6 +229,13 @@ namespace Siccity.GLTFUtility {
 						}
 					}
 				}
+				/*
+				~MeshData()
+				{
+					if (dracoData != null)
+						foreach (var data in dracoData)
+							data.Dispose();
+				}*/
 
 				private Vector3[] GetMorphWeights(int? accessor, int vertStartIndex, int vertCount, GLTFAccessor.ImportResult[] accessors) {
 					if (accessor.HasValue) {
@@ -238,6 +254,27 @@ namespace Siccity.GLTFUtility {
 
 				public Mesh ToMesh() {
 					Mesh mesh = new Mesh();
+
+					if (dracoMeshes.Any())
+					{
+						var combine = new CombineInstance[dracoMeshes.Count];
+						for (var i = 0; i < combine.Length; i++)
+						{
+							combine[i].mesh = dracoMeshes.ElementAt(i);
+							// For some reason, we still need to do an axis system conversion here:
+							combine[i].transform =
+#if UNITY_EDITOR
+								Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(-1, 1, -1));
+#else
+								Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(1, 1, 1));
+#endif
+						}
+
+						mesh.CombineMeshes(combine);
+
+						return mesh;
+					}
+
 					if (verts.Count >= ushort.MaxValue) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 					mesh.vertices = verts.ToArray();
 					mesh.subMeshCount = submeshTris.Count;
@@ -357,6 +394,15 @@ namespace Siccity.GLTFUtility {
 					if (meshData[i] == null) {
 						Debug.LogWarning("Mesh " + i + " import error");
 						continue;
+					}
+
+					// draco
+					foreach(var dracoRoutine in meshData[i].dracoMeshRoutines)
+					{
+						//if (dracoRoutine == null)
+							//continue;
+
+						yield return dracoRoutine;
 					}
 
 					Result[i] = new ImportResult();

@@ -81,7 +81,7 @@ namespace Siccity.GLTFUtility {
 		}
 
 		public class ImportTask : Importer.ImportTask<ImportResult[]> {
-			public ImportTask(List<GLTFImage> images, string directoryRoot, GLTFBufferView.ImportTask bufferViewTask) : base(bufferViewTask) {
+			public ImportTask(List<GLTFImage> images, string directoryRoot, GLTFBufferView.ImportTask bufferViewTask, Func<string, byte[]> urlDataDelegate) : base(bufferViewTask) {
 				task = new Task(() => {
 					// No images
 					if (images == null) return;
@@ -99,6 +99,12 @@ namespace Siccity.GLTFUtility {
 								string content = images[i].uri.Split(',').Last();
 								byte[] imageBytes = Convert.FromBase64String(content);
 								Result[i] = new ImportResult(imageBytes);
+							}
+							else
+							{
+								// remote data
+								var dataBytes = urlDataDelegate(images[i].uri);
+								Result[i] = new ImportResult(dataBytes);
 							}
 						} else if (images[i].bufferView.HasValue && !string.IsNullOrEmpty(images[i].mimeType)) {
 							GLTFBufferView.ImportResult view = bufferViewTask.Result[images[i].bufferView.Value];
