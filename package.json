@@ -6,6 +6,6 @@
     "keywords": ["glTF", "import"],
 	"description": "Lightweight glTF loader.",
 	"dependencies": {
-    "com.atteneder.draco": "https://gitlab.com/atteneder/DracoUnity.git#1.4.0"
+    "com.atteneder.draco": "1.4.0"
 	}
 }
