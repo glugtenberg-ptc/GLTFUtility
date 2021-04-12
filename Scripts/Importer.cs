@@ -39,15 +39,26 @@ namespace Siccity.GLTFUtility {
 		}
 
 		/// <param name="bytes">GLB file is supported</param>
-		public static GameObject LoadFromBytes(byte[] bytes, ImportSettings importSettings = null) {
+		public static GameObject LoadFromBytesGLB(byte[] bytes, ImportSettings importSettings = null) {
 			AnimationClip[] animations;
 			if (importSettings == null) importSettings = new ImportSettings();
 			return ImportGLB(bytes, importSettings, out animations);
 		}
 
 		/// <param name="bytes">GLB file is supported</param>
-		public static GameObject LoadFromBytes(byte[] bytes, ImportSettings importSettings, out AnimationClip[] animations) {
+		public static GameObject LoadFromBytesGLB(byte[] bytes, ImportSettings importSettings, out AnimationClip[] animations) {
 			return ImportGLB(bytes, importSettings, out animations);
+		}
+		
+		public static GameObject LoadFromBytesGLTF(string json, byte[] bytes, ImportSettings importSettings, out AnimationClip[] animations, Func<string, Task<byte[]>> urlDataDelegate)
+		{
+			GLTFObject gltfObject = JsonConvert.DeserializeObject<GLTFObject>(json);
+			return gltfObject.LoadInternal(null, bytes, 0, importSettings, out animations, urlDataDelegate);
+		}
+
+		public static void LoadFromBytesGLTFAsync(string json, byte[] bytes, ImportSettings importSettings, Func<string, Task<byte[]>> urlDataDelegate, Action<GameObject, AnimationClip[]> onFinished, Action<float> onProgress = null)
+		{
+			LoadAsync(json, null, bytes, 0, importSettings, onFinished, onProgress, urlDataDelegate).RunCoroutine();
 		}
 
 		public static void LoadFromFileAsync(string filepath, ImportSettings importSettings, Action<GameObject, AnimationClip[]> onFinished, Action<float> onProgress = null) {
@@ -182,7 +193,7 @@ namespace Siccity.GLTFUtility {
 		}
 
 #region Sync
-		private static GameObject LoadInternal(this GLTFObject gltfObject, string filepath, byte[] bytefile, long binChunkStart, ImportSettings importSettings, out AnimationClip[] animations) {
+		private static GameObject LoadInternal(this GLTFObject gltfObject, string filepath, byte[] bytefile, long binChunkStart, ImportSettings importSettings, out AnimationClip[] animations, Func<string, Task<byte[]>> urlDataDelegate = null) {
 			CheckExtensions(gltfObject);
 
 			// directory root is sometimes used for loading buffers from containing file, or local images
@@ -191,13 +202,13 @@ namespace Siccity.GLTFUtility {
 			importSettings.shaderOverrides.CacheDefaultShaders();
 
 			// Import tasks synchronously
-			GLTFBuffer.ImportTask bufferTask = new GLTFBuffer.ImportTask(gltfObject.buffers, filepath, bytefile, binChunkStart);
+			GLTFBuffer.ImportTask bufferTask = new GLTFBuffer.ImportTask(gltfObject.buffers, filepath, bytefile, binChunkStart, urlDataDelegate);
 			bufferTask.RunSynchronously();
 			GLTFBufferView.ImportTask bufferViewTask = new GLTFBufferView.ImportTask(gltfObject.bufferViews, bufferTask);
 			bufferViewTask.RunSynchronously();
 			GLTFAccessor.ImportTask accessorTask = new GLTFAccessor.ImportTask(gltfObject.accessors, bufferViewTask);
 			accessorTask.RunSynchronously();
-			GLTFImage.ImportTask imageTask = new GLTFImage.ImportTask(gltfObject.images, directoryRoot, bufferViewTask);
+			GLTFImage.ImportTask imageTask = new GLTFImage.ImportTask(gltfObject.images, directoryRoot, bufferViewTask, urlDataDelegate);
 			imageTask.RunSynchronously();
 			GLTFTexture.ImportTask textureTask = new GLTFTexture.ImportTask(gltfObject.textures, imageTask);
 			textureTask.RunSynchronously();
@@ -222,12 +233,13 @@ namespace Siccity.GLTFUtility {
 #endregion
 
 #region Async
-		private static IEnumerator LoadAsync(string json, string filepath, byte[] bytefile, long binChunkStart, ImportSettings importSettings, Action<GameObject, AnimationClip[]> onFinished, Action<float> onProgress = null) {
+		private static IEnumerator LoadAsync(string json, string filepath, byte[] bytefile, long binChunkStart, ImportSettings importSettings, Action<GameObject, AnimationClip[]> onFinished, Action<float> onProgress = null, Func<string, Task<byte[]>> urlDataDelegate = null) {
 			// Threaded deserialization
 			Task<GLTFObject> deserializeTask = new Task<GLTFObject>(() => JsonConvert.DeserializeObject<GLTFObject>(json));
 			deserializeTask.Start();
 			while (!deserializeTask.IsCompleted) yield return null;
 			GLTFObject gltfObject = deserializeTask.Result;
+
 			CheckExtensions(gltfObject);
 
 			// directory root is sometimes used for loading buffers from containing file, or local images
@@ -238,13 +250,13 @@ namespace Siccity.GLTFUtility {
 			// Setup import tasks
 			List<ImportTask> importTasks = new List<ImportTask>();
 
-			GLTFBuffer.ImportTask bufferTask = new GLTFBuffer.ImportTask(gltfObject.buffers, filepath, bytefile, binChunkStart);
+			GLTFBuffer.ImportTask bufferTask = new GLTFBuffer.ImportTask(gltfObject.buffers, filepath, bytefile, binChunkStart, urlDataDelegate);
 			importTasks.Add(bufferTask);
 			GLTFBufferView.ImportTask bufferViewTask = new GLTFBufferView.ImportTask(gltfObject.bufferViews, bufferTask);
 			importTasks.Add(bufferViewTask);
 			GLTFAccessor.ImportTask accessorTask = new GLTFAccessor.ImportTask(gltfObject.accessors, bufferViewTask);
 			importTasks.Add(accessorTask);
-			GLTFImage.ImportTask imageTask = new GLTFImage.ImportTask(gltfObject.images, directoryRoot, bufferViewTask);
+			GLTFImage.ImportTask imageTask = new GLTFImage.ImportTask(gltfObject.images, directoryRoot, bufferViewTask, urlDataDelegate);
 			importTasks.Add(imageTask);
 			GLTFTexture.ImportTask textureTask = new GLTFTexture.ImportTask(gltfObject.textures, imageTask);
 			importTasks.Add(textureTask);
