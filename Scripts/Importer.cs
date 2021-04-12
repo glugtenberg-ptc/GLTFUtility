@@ -50,13 +50,13 @@ namespace Siccity.GLTFUtility {
 			return ImportGLB(bytes, importSettings, out animations);
 		}
 		
-		public static GameObject LoadFromBytesGLTF(string json, byte[] bytes, ImportSettings importSettings, out AnimationClip[] animations, Func<string, byte[]> urlDataDelegate)
+		public static GameObject LoadFromBytesGLTF(string json, byte[] bytes, ImportSettings importSettings, out AnimationClip[] animations, Func<string, Task<byte[]>> urlDataDelegate)
 		{
 			GLTFObject gltfObject = JsonConvert.DeserializeObject<GLTFObject>(json);
 			return gltfObject.LoadInternal(null, bytes, 0, importSettings, out animations, urlDataDelegate);
 		}
 
-		public static void LoadFromBytesGLTFAsync(string json, byte[] bytes, ImportSettings importSettings, Func<string, byte[]> urlDataDelegate, Action<GameObject, AnimationClip[]> onFinished, Action<float> onProgress = null)
+		public static void LoadFromBytesGLTFAsync(string json, byte[] bytes, ImportSettings importSettings, Func<string, Task<byte[]>> urlDataDelegate, Action<GameObject, AnimationClip[]> onFinished, Action<float> onProgress = null)
 		{
 			LoadAsync(json, null, bytes, 0, importSettings, onFinished, onProgress, urlDataDelegate).RunCoroutine();
 		}
@@ -193,7 +193,7 @@ namespace Siccity.GLTFUtility {
 		}
 
 #region Sync
-		private static GameObject LoadInternal(this GLTFObject gltfObject, string filepath, byte[] bytefile, long binChunkStart, ImportSettings importSettings, out AnimationClip[] animations, Func<string, byte[]> urlDataDelegate = null) {
+		private static GameObject LoadInternal(this GLTFObject gltfObject, string filepath, byte[] bytefile, long binChunkStart, ImportSettings importSettings, out AnimationClip[] animations, Func<string, Task<byte[]>> urlDataDelegate = null) {
 			CheckExtensions(gltfObject);
 
 			// directory root is sometimes used for loading buffers from containing file, or local images
@@ -233,12 +233,13 @@ namespace Siccity.GLTFUtility {
 #endregion
 
 #region Async
-		private static IEnumerator LoadAsync(string json, string filepath, byte[] bytefile, long binChunkStart, ImportSettings importSettings, Action<GameObject, AnimationClip[]> onFinished, Action<float> onProgress = null, Func<string, byte[]> urlDataDelegate = null) {
+		private static IEnumerator LoadAsync(string json, string filepath, byte[] bytefile, long binChunkStart, ImportSettings importSettings, Action<GameObject, AnimationClip[]> onFinished, Action<float> onProgress = null, Func<string, Task<byte[]>> urlDataDelegate = null) {
 			// Threaded deserialization
 			Task<GLTFObject> deserializeTask = new Task<GLTFObject>(() => JsonConvert.DeserializeObject<GLTFObject>(json));
 			deserializeTask.Start();
 			while (!deserializeTask.IsCompleted) yield return null;
 			GLTFObject gltfObject = deserializeTask.Result;
+
 			CheckExtensions(gltfObject);
 
 			// directory root is sometimes used for loading buffers from containing file, or local images

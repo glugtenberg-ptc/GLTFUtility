@@ -229,13 +229,6 @@ namespace Siccity.GLTFUtility {
 						}
 					}
 				}
-				/*
-				~MeshData()
-				{
-					if (dracoData != null)
-						foreach (var data in dracoData)
-							data.Dispose();
-				}*/
 
 				private Vector3[] GetMorphWeights(int? accessor, int vertStartIndex, int vertCount, GLTFAccessor.ImportResult[] accessors) {
 					if (accessor.HasValue) {
@@ -262,12 +255,7 @@ namespace Siccity.GLTFUtility {
 						{
 							combine[i].mesh = dracoMeshes.ElementAt(i);
 							// For some reason, we still need to do an axis system conversion here:
-							combine[i].transform =
-#if UNITY_EDITOR
-								Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(-1, 1, -1));
-#else
-								Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(1, 1, 1));
-#endif
+							combine[i].transform = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(-1, 1, -1));
 						}
 
 						mesh.CombineMeshes(combine);
@@ -399,9 +387,6 @@ namespace Siccity.GLTFUtility {
 					// draco
 					foreach(var dracoRoutine in meshData[i].dracoMeshRoutines)
 					{
-						//if (dracoRoutine == null)
-							//continue;
-
 						yield return dracoRoutine;
 					}
 

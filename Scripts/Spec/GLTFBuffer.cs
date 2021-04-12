@@ -29,7 +29,7 @@ namespace Siccity.GLTFUtility {
 #region Import
 		/// <param name="filepath">Filepath if loading from a file</param>
 		/// <param name="bytefile">bytes if loading from raw bytes</param>
-		public ImportResult Import(string filepath, byte[] bytefile, long binChunkStart, Func<string, byte[]> urlDataDelegate) {
+		public async Task<ImportResult> Import(string filepath, byte[] bytefile, long binChunkStart, Func<string, Task<byte[]>> urlDataDelegate) {
 			ImportResult result = new ImportResult();
 
 			//var externalBytes = (filepath == null && !uri.StartsWith(embeddedPrefix) && !uri.StartsWith(embeddedPrefix2));
@@ -61,7 +61,7 @@ namespace Siccity.GLTFUtility {
 				else
 				{
 					//remote
-					var remoteData = urlDataDelegate(uri);
+					var remoteData = await urlDataDelegate(uri);
 
 					result.stream = new MemoryStream(remoteData);
 					result.startOffset = result.stream.Length - byteLength;
@@ -75,7 +75,7 @@ namespace Siccity.GLTFUtility {
 		public class ImportTask : Importer.ImportTask<ImportResult[]> {
 			/// <param name="filepath">Filepath if loading from a file</param>
 			/// <param name="bytefile">bytes if loading from raw bytes</param>
-			public ImportTask(List<GLTFBuffer> buffers, string filepath, byte[] bytefile, long binChunkStart, Func<string, byte[]> urlDataDelegate) : base()
+			public ImportTask(List<GLTFBuffer> buffers, string filepath, byte[] bytefile, long binChunkStart, Func<string, Task<byte[]>> urlDataDelegate) : base()
 			{
 
 				task = new Task(() =>
@@ -83,7 +83,7 @@ namespace Siccity.GLTFUtility {
 					Result = new ImportResult[buffers.Count];
 					for (int i = 0; i < Result.Length; i++)
 					{
-						Result[i] = buffers[i].Import(filepath, bytefile, binChunkStart, urlDataDelegate);
+						Result[i] = buffers[i].Import(filepath, bytefile, binChunkStart, urlDataDelegate).Result;
 					}
 				});
 
