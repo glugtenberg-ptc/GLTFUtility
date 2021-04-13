@@ -10,7 +10,8 @@ using UnityEngine.Scripting;
 
 namespace Siccity.GLTFUtility {
 	// https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md#node
-	[Preserve] public class GLTFNode {
+	[Preserve] public class GLTFNode : GLTFProperty
+	{
 #region Serialization
 		public string name;
 		/// <summary> Indices of child nodes </summary>
@@ -142,6 +143,29 @@ namespace Siccity.GLTFUtility {
 							camera.fieldOfView = Mathf.Rad2Deg * cameraData.perspective.yfov;
 						}
 					}
+
+					// Setup node extras
+					if (nodes[i].extras != null && nodes[i].extras is Newtonsoft.Json.Linq.JObject extras)
+					{
+						Dictionary<string, string> extrasDict = new Dictionary<string, string>();
+						foreach (var prop in extras.Properties())
+						{
+							if (prop.Value.Type != Newtonsoft.Json.Linq.JTokenType.String)
+							{
+								continue;
+							}
+
+							var jv = prop.Value as Newtonsoft.Json.Linq.JValue;
+							extrasDict.Add(prop.Name, jv.Value as string);
+						}
+
+						if (extrasDict.Count > 0)
+						{
+							GLTFExtras extrasComp = Result[i].transform.gameObject.AddComponent<GLTFExtras>();
+							extrasComp.Extras = extrasDict;
+						}
+
+					}
 				}
 				IsCompleted = true;
 			}
@@ -201,5 +225,10 @@ namespace Siccity.GLTFUtility {
 			}
 		}
 #endregion
+	}
+
+	public class GLTFExtras : MonoBehaviour
+	{
+		public IDictionary<string, string> Extras { get; internal set; }
 	}
 }
