@@ -49,7 +49,12 @@ namespace Siccity.GLTFUtility {
 		public static GameObject LoadFromBytesGLB(byte[] bytes, ImportSettings importSettings, out AnimationClip[] animations) {
 			return ImportGLB(bytes, importSettings, out animations);
 		}
-		
+
+		public static void LoadFromBytesGLBAsync(byte[] bytes, ImportSettings importSettings, Action<GameObject, AnimationClip[]> onFinished, Action<float> onProgress = null)
+		{
+			ImportGLBAsync(bytes, importSettings, onFinished, onProgress);
+		}
+
 		public static GameObject LoadFromBytesGLTF(string json, byte[] bytes, ImportSettings importSettings, out AnimationClip[] animations, Func<string, Task<byte[]>> urlDataDelegate)
 		{
 			GLTFObject gltfObject = JsonConvert.DeserializeObject<GLTFObject>(json);

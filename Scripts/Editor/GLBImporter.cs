@@ -6,7 +6,13 @@ using UnityEditor.AssetImporters;
 #endif
 
 namespace Siccity.GLTFUtility {
-	[ScriptedImporter(1, "glb")]
+	// PTC HACK, set this importer to target .ptcglb instead of .glb so that it
+	// does not conflict with MRTK
+	// This prevents the errors from showing up in the console when opening the project.
+	// It retains the ability for PTC to use this importer if desired.
+	// Note that today we do not import GLBs as assets into a Unity Project, we load them
+	// at run time.
+	[ScriptedImporter(1, "ptcglb")]
 	public class GLBImporter : GLTFImporter {
 
 		public override void OnImportAsset(AssetImportContext ctx) {
