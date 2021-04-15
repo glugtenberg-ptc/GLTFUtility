@@ -76,6 +76,22 @@ namespace Siccity.GLTFUtility {
 			}
 		}
 
+		public static void LoadFromBytesAsync(byte[] data, ImportSettings importSettings, Func<string, Task<byte[]>> urlDataDelegate, Action<GameObject, AnimationClip[]> onFinished, Action<float> onProgress = null)
+		{
+			if(IsValidGLB(data))
+			{
+				// GLB data
+				LoadFromBytesGLBAsync(data, importSettings, onFinished, onProgress);
+			}
+			else
+			{
+				// Assume GLTF data
+				var json = Encoding.UTF8.GetString(data, 0, data.Length);
+
+				LoadFromBytesGLTFAsync(json, data, importSettings, urlDataDelegate, onFinished, onProgress);
+			}
+		}
+
 #region GLB
 		private static GameObject ImportGLB(string filepath, ImportSettings importSettings, out AnimationClip[] animations) {
 			FileStream stream = File.OpenRead(filepath);
@@ -110,19 +126,10 @@ namespace Siccity.GLTFUtility {
 		private static string GetGLBJson(Stream stream, out long binChunkStart) {
 			byte[] buffer = new byte[12];
 			stream.Read(buffer, 0, 12);
-			// 12 byte header
-			// 0-4  - magic = "glTF"
-			// 4-8  - version = 2
-			// 8-12 - length = total length of glb, including Header and all Chunks, in bytes.
-			string magic = Encoding.Default.GetString(buffer, 0, 4);
-			if (magic != "glTF") {
+
+			if(!IsValidGLB(buffer))
+			{
 				Debug.LogWarning("Input does not look like a .glb file");
-				binChunkStart = 0;
-				return null;
-			}
-			uint version = System.BitConverter.ToUInt32(buffer, 4);
-			if (version != 2) {
-				Debug.LogWarning("Importer does not support gltf version " + version);
 				binChunkStart = 0;
 				return null;
 			}
@@ -148,6 +155,27 @@ namespace Siccity.GLTFUtility {
 			return json;
 		}
 #endregion
+
+		private static bool IsValidGLB(byte[] buffer)
+		{
+			// 12 byte header
+			// 0-4  - magic = "glTF"
+			// 4-8  - version = 2
+			// 8-12 - length = total length of glb, including Header and all Chunks, in bytes.
+			string magic = Encoding.Default.GetString(buffer, 0, 4);
+			if (magic != "glTF")
+			{
+				return false;
+			}
+			uint version = System.BitConverter.ToUInt32(buffer, 4);
+			if (version != 2)
+			{
+				Debug.LogWarning("Importer does not support gltf version " + version);
+				return false;
+			}
+
+			return true;
+		}
 
 		private static GameObject ImportGLTF(string filepath, ImportSettings importSettings, out AnimationClip[] animations) {
 			string json = File.ReadAllText(filepath);
